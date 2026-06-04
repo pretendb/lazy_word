@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -62,6 +63,7 @@ class ApkgImporter {
         );
       }
 
+      final mediaPaths = await _extractMedia(archive, deckId);
       onProgress?.call('Reading Anki database...');
       var cards = <FlashCard>[];
       Object? lastParseError;
@@ -76,7 +78,11 @@ class ApkgImporter {
           flush: true,
         );
         try {
-          cards = await _parser.parse(collectionPath, deckId);
+          cards = await _parser.parse(
+            collectionPath,
+            deckId,
+            mediaPaths: mediaPaths,
+          );
           if (cards.isNotEmpty) break;
         } catch (error) {
           lastParseError = error;
@@ -105,8 +111,10 @@ class ApkgImporter {
       await _deckDao.replaceDeck(
         deck,
         cards.map((card) => card.toMap()).toList(),
+        _mediaRows(cards),
       );
       await _paths.writeCurrentDeckId(deck.id);
+      await _paths.removeOtherDeckMedia(deck.id);
       onProgress?.call('Import complete.');
       return ImportResult(deck);
     } on AppException {
@@ -121,6 +129,62 @@ class ApkgImporter {
       }
     }
   }
+
+  Future<Map<String, String>> _extractMedia(
+    Archive archive,
+    String deckId,
+  ) async {
+    final manifestEntry = archive.files.where(
+      (entry) => entry.isFile && p.basename(entry.name) == 'media',
+    );
+    if (manifestEntry.isEmpty) return const {};
+    final manifest =
+        jsonDecode(utf8.decode(manifestEntry.first.content as List<int>))
+            as Map<String, dynamic>;
+    final archiveFiles = {
+      for (final entry in archive.files.where((entry) => entry.isFile))
+        entry.name: entry,
+    };
+    final directory = await _paths.createDeckMediaDirectory(deckId);
+    final paths = <String, String>{};
+    for (final entry in manifest.entries) {
+      final filename = entry.value as String?;
+      final asset = archiveFiles[entry.key];
+      if (filename == null || asset == null || p.isAbsolute(filename)) continue;
+      final safeName =
+          '${sha256.convert(filename.codeUnits)}${p.extension(filename)}';
+      final file = File(p.join(directory.path, safeName));
+      await file.writeAsBytes(asset.content as List<int>, flush: true);
+      paths[filename] = file.path;
+    }
+    return paths;
+  }
+
+  List<Map<String, Object?>> _mediaRows(List<FlashCard> cards) {
+    final rows = <Map<String, Object?>>[];
+    for (final card in cards) {
+      for (final image in card.images) {
+        rows.add(_mediaRow(card.id, image.filename, image.localPath, 'image'));
+      }
+      for (final audio in card.audio) {
+        rows.add(_mediaRow(card.id, audio.filename, audio.localPath, 'audio'));
+      }
+    }
+    return rows;
+  }
+
+  Map<String, Object?> _mediaRow(
+    String cardId,
+    String filename,
+    String localPath,
+    String type,
+  ) => {
+    'id': sha256.convert('$cardId|$type|$filename'.codeUnits).toString(),
+    'card_id': cardId,
+    'file_name': filename,
+    'local_path': localPath,
+    'media_type': type,
+  };
 }
 
 List<ArchiveFile> orderedCollectionFiles(Archive archive) {

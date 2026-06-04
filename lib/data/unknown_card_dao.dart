@@ -2,6 +2,7 @@ import '../domain/flash_card.dart';
 import '../domain/review_event.dart';
 import '../domain/unknown_card.dart';
 import 'local_db.dart';
+import 'media_dao.dart';
 
 class UnknownCardDao {
   UnknownCardDao(this._localDb);
@@ -21,7 +22,8 @@ class UnknownCardDao {
   Future<FlashCard?> findCard(String cardId) async {
     final db = await _localDb.database;
     final rows = await db.query('cards', where: 'id = ?', whereArgs: [cardId]);
-    return rows.isEmpty ? null : FlashCard.fromMap(rows.first);
+    if (rows.isEmpty) return null;
+    return (await hydrateCardMedia(db, [FlashCard.fromMap(rows.first)])).first;
   }
 
   Future<void> review(UnknownCard card, {required bool known}) async {

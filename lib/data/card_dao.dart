@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../domain/flash_card.dart';
 import '../domain/review_event.dart';
 import 'local_db.dart';
+import 'media_dao.dart';
 
 class CardDao {
   CardDao(this._localDb);
@@ -17,7 +18,7 @@ class CardDao {
       whereArgs: [deckId],
       orderBy: 'created_at, id',
     );
-    return rows.map(FlashCard.fromMap).toList();
+    return hydrateCardMedia(db, rows.map(FlashCard.fromMap).toList());
   }
 
   Future<void> markRead(FlashCard card, {required bool known}) async {

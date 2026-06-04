@@ -23,6 +23,24 @@ class AppPaths {
     return directory;
   }
 
+  Future<Directory> createDeckMediaDirectory(String deckId) async {
+    final root = await appDirectory;
+    final directory = Directory(p.join(root.path, 'media', deckId));
+    await directory.create(recursive: true);
+    return directory;
+  }
+
+  Future<void> removeOtherDeckMedia(String deckId) async {
+    final root = await appDirectory;
+    final mediaRoot = Directory(p.join(root.path, 'media'));
+    if (!await mediaRoot.exists()) return;
+    await for (final entry in mediaRoot.list()) {
+      if (entry is Directory && p.basename(entry.path) != deckId) {
+        await entry.delete(recursive: true);
+      }
+    }
+  }
+
   Future<File> get currentDeckFile async {
     final directory = await appDirectory;
     return File(p.join(directory.path, 'current_deck_id'));

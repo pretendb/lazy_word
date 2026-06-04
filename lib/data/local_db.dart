@@ -16,7 +16,7 @@ class LocalDb {
     return factory.openDatabase(
       p.join(await factory.getDatabasesPath(), 'lazy_word.db'),
       options: sqflite.OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: (db, version) async {
           await db.execute('''
@@ -36,11 +36,24 @@ class LocalDb {
               anki_card_id TEXT,
               front TEXT NOT NULL,
               back TEXT NOT NULL,
+              front_html TEXT,
+              back_html TEXT,
+              card_type TEXT NOT NULL DEFAULT 'basic',
               raw_fields TEXT,
               read_seen_count INTEGER NOT NULL DEFAULT 0,
               last_read_at INTEGER,
               created_at INTEGER NOT NULL,
               FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE media (
+              id TEXT PRIMARY KEY,
+              card_id TEXT NOT NULL,
+              file_name TEXT NOT NULL,
+              local_path TEXT NOT NULL,
+              media_type TEXT NOT NULL,
+              FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
             )
           ''');
           await db.execute('''
@@ -72,6 +85,27 @@ class LocalDb {
           await db.execute(
             'CREATE INDEX unknown_deck_idx ON unknown_cards(deck_id)',
           );
+          await db.execute('CREATE INDEX media_card_idx ON media(card_id)');
+        },
+        onUpgrade: (db, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            await db.execute('ALTER TABLE cards ADD COLUMN front_html TEXT');
+            await db.execute('ALTER TABLE cards ADD COLUMN back_html TEXT');
+            await db.execute(
+              "ALTER TABLE cards ADD COLUMN card_type TEXT NOT NULL DEFAULT 'basic'",
+            );
+            await db.execute('''
+              CREATE TABLE media (
+                id TEXT PRIMARY KEY,
+                card_id TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                local_path TEXT NOT NULL,
+                media_type TEXT NOT NULL,
+                FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+              )
+            ''');
+            await db.execute('CREATE INDEX media_card_idx ON media(card_id)');
+          }
         },
       ),
     );
