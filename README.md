@@ -26,6 +26,54 @@ flutter test
 flutter build linux --no-pub
 ```
 
+## Linux Install
+
+Install the packaged Debian build from the repository root:
+
+```bash
+sudo apt install ./dist/lazy-word_1.0.0_amd64.deb
+```
+
+Or install with an absolute path from anywhere:
+
+```bash
+sudo apt install /home/ubuntu/lazy_word/dist/lazy-word_1.0.0_amd64.deb
+```
+
+Run the app:
+
+```bash
+lazy-word
+```
+
+If `apt` cannot resolve the local file path, use `dpkg`:
+
+```bash
+sudo dpkg -i ./dist/lazy-word_1.0.0_amd64.deb
+sudo apt-get install -f
+```
+
+## Linux Uninstall
+
+Remove the app package:
+
+```bash
+sudo apt remove lazy-word
+```
+
+Remove package configuration too:
+
+```bash
+sudo apt purge lazy-word
+```
+
+Imported decks and review progress are user data and are not deleted by package removal. To reset the app completely:
+
+```bash
+rm -f "$HOME/.dart_tool/sqflite_common_ffi/databases/lazy_word.db"*
+rm -rf "$HOME/Documents/lazy_word"
+```
+
 ## License
 
 MIT

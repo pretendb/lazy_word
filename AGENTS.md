@@ -320,6 +320,151 @@ The runner sets `XCURSOR_THEME=Adwaita` when no cursor theme is defined and filt
 
 ---
 
+## App Packaging
+
+Linux Debian packaging is currently a manual local build process.
+
+Package naming:
+
+- Debian package name: `lazy-word`
+- Installed app directory: `/opt/lazy-word`
+- Launcher command: `lazy-word`
+- GTK application ID: `com.example.lazy_word`
+- Desktop entry: `/usr/share/applications/com.example.lazy_word.desktop`
+- Desktop icon name: `lazy-word`
+- Debian artifact path: `dist/lazy-word_<version>_amd64.deb`
+
+Use the Flutter app version from `pubspec.yaml` without the build suffix. For example, `version: 1.0.0+1` becomes Debian package version `1.0.0`.
+
+Before packaging, build and verify:
+
+```bash
+flutter pub get
+flutter analyze --no-pub
+flutter test
+flutter build linux --no-pub --release
+```
+
+The release bundle to package is:
+
+```text
+build/linux/x64/release/bundle/
+```
+
+Create the Debian staging tree:
+
+```bash
+mkdir -p dist/deb/lazy-word/DEBIAN
+mkdir -p dist/deb/lazy-word/opt/lazy-word
+mkdir -p dist/deb/lazy-word/usr/bin
+mkdir -p dist/deb/lazy-word/usr/share/applications
+mkdir -p dist/deb/lazy-word/usr/share/icons/hicolor/256x256/apps
+cp -a build/linux/x64/release/bundle/. dist/deb/lazy-word/opt/lazy-word/
+```
+
+`dist/deb/lazy-word/DEBIAN/control` must include `ffmpeg`, because Linux audio playback uses `ffplay`:
+
+```text
+Package: lazy-word
+Version: 1.0.0
+Section: education
+Priority: optional
+Architecture: amd64
+Maintainer: chzw517 <chzw517@outlook.com>
+Depends: libgtk-3-0, libblkid1, liblzma5, ffmpeg
+Description: Local-first Flutter flashcard app for Anki APKG decks
+ lazy_word imports downloaded Anki .apkg decks locally, stores cards and
+ review progress in SQLite, and supports swipe-based vocabulary review.
+```
+
+Create the launcher script at `dist/deb/lazy-word/usr/bin/lazy-word`:
+
+```sh
+#!/bin/sh
+exec /opt/lazy-word/lazy_word "$@"
+```
+
+Create the desktop entry at `dist/deb/lazy-word/usr/share/applications/com.example.lazy_word.desktop`.
+The desktop file basename must match the GTK application ID so Linux shells can associate the running window with the installed launcher and taskbar icon:
+
+```ini
+[Desktop Entry]
+Name=lazy_word
+Comment=Local flashcard vocabulary app
+Exec=lazy-word
+Icon=lazy-word
+Terminal=false
+Type=Application
+Categories=Education;
+StartupWMClass=com.example.lazy_word
+```
+
+Copy the package icon:
+
+```bash
+cp linux/runner/resources/lazy-word-256.png \
+  dist/deb/lazy-word/usr/share/icons/hicolor/256x256/apps/lazy-word.png
+```
+
+Add `DEBIAN/postinst` and `DEBIAN/postrm` scripts to refresh desktop and icon caches when available:
+
+```sh
+#!/bin/sh
+set -e
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+fi
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database -q /usr/share/applications || true
+fi
+
+exit 0
+```
+
+Normalize permissions before building:
+
+```bash
+find dist/deb/lazy-word -type d -exec chmod 755 {} +
+find dist/deb/lazy-word -type f -exec chmod 644 {} +
+chmod 755 dist/deb/lazy-word/usr/bin/lazy-word
+chmod 755 dist/deb/lazy-word/DEBIAN/postinst
+chmod 755 dist/deb/lazy-word/DEBIAN/postrm
+chmod 755 dist/deb/lazy-word/opt/lazy-word/lazy_word
+chmod 755 dist/deb/lazy-word/opt/lazy-word/lib/*.so
+```
+
+Build the `.deb` with root ownership in the archive:
+
+```bash
+dpkg-deb --root-owner-group --build \
+  dist/deb/lazy-word \
+  dist/lazy-word_1.0.0_amd64.deb
+```
+
+Verify package metadata and contents:
+
+```bash
+dpkg-deb --field dist/lazy-word_1.0.0_amd64.deb Package Version Architecture Depends
+dpkg-deb --contents dist/lazy-word_1.0.0_amd64.deb
+```
+
+Manual install/uninstall smoke test:
+
+```bash
+sudo dpkg -i ./dist/lazy-word_1.0.0_amd64.deb
+sudo apt-get install -f
+lazy-word
+sudo apt remove lazy-word
+```
+
+Use `dpkg -i` for local install tests. In this environment, `sudo apt install ./dist/lazy-word_1.0.0_amd64.deb` can report `Unsupported file ... given on commandline` even when the `.deb` is valid.
+
+Do not commit generated `dist/` package output unless explicitly requested.
+
+---
+
 ## Error Handling
 
 Handle these clearly:

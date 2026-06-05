@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="lazy_word app icon">
+  <defs>
+    <linearGradient id="bg" x1="160" y1="128" x2="864" y2="896" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#12343B"/>
+      <stop offset="0.58" stop-color="#1E5F66"/>
+      <stop offset="1" stop-color="#2E7D6F"/>
+    </linearGradient>
+    <linearGradient id="frontCard" x1="310" y1="274" x2="700" y2="746" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF9E8"/>
+      <stop offset="1" stop-color="#F3E8CA"/>
+    </linearGradient>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#061C22" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <path d="M246 285c-14-53 17-107 70-121l322-86c53-14 107 17 121 70l112 418c14 53-17 107-70 121l-322 86c-53 14-107-17-121-70L246 285Z" fill="#71D0C6" opacity="0.72"/>
+  <path d="M176 364c0-55 45-100 100-100h334c55 0 100 45 100 100v433c0 55-45 100-100 100H276c-55 0-100-45-100-100V364Z" fill="#F2B457" opacity="0.92"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="264" y="218" width="496" height="588" rx="84" fill="url(#frontCard)"/>
+    <rect x="318" y="312" width="388" height="34" rx="17" fill="#1E5F66"/>
+    <rect x="318" y="382" width="284" height="30" rx="15" fill="#5FA8A1"/>
+    <rect x="318" y="448" width="340" height="30" rx="15" fill="#E06A53"/>
+    <rect x="318" y="514" width="238" height="30" rx="15" fill="#5FA8A1"/>
+  </g>
+
+  <path d="M698 368c37 52 58 115 58 182 0 55-14 107-39 152" fill="none" stroke="#12343B" stroke-width="44" stroke-linecap="round"/>
+  <path d="M718 703l-13 96 82-51" fill="none" stroke="#12343B" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M326 656c-36-51-57-114-57-181 0-56 14-109 40-154" fill="none" stroke="#E06A53" stroke-width="44" stroke-linecap="round"/>
+  <path d="M306 322l13-96-82 51" fill="none" stroke="#E06A53" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <circle cx="434" cy="642" r="22" fill="#12343B"/>
+  <circle cx="512" cy="642" r="22" fill="#12343B"/>
+  <circle cx="590" cy="642" r="22" fill="#12343B"/>
+  <circle cx="434" cy="714" r="22" fill="#12343B"/>
+  <circle cx="512" cy="714" r="22" fill="#12343B"/>
+  <circle cx="590" cy="714" r="22" fill="#12343B"/>
+</svg>
