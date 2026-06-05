@@ -46,6 +46,13 @@ Run the app:
 lazy-word
 ```
 
+if you got this issue
+
+```bash
+/opt/lazy-word/lazy_word: symbol lookup error: /opt/lazy-word/lazy_word: undefined symbol: g_once_init_enter_pointer
+```
+try to upgrade you ubuntu to 26.04, since i developed in this distro
+
 If `apt` cannot resolve the local file path, use `dpkg`:
 
 ```bash
