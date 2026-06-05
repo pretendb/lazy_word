@@ -73,6 +73,8 @@ Imported decks and review progress are user data and are not deleted by package 
 rm -f "$HOME/.dart_tool/sqflite_common_ffi/databases/lazy_word.db"*
 rm -rf "$HOME/Documents/lazy_word"
 ```
+## Download the apkg resource from
+https://ankiweb.net/shared/decks?search=english&sort=rating
 
 ## License
 
