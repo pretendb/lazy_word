@@ -1,79 +1,54 @@
-# AGENTS.md
+# Agents.md
 
 ## Project Overview
 
-This repository contains a Flutter MVP for a pure-local flashcard vocabulary app.
+This repository contains `lazy_word`, a Flutter desktop/mobile MVP for a fully local flashcard vocabulary app.
 
-The app imports a downloaded Anki `.apkg` file, parses it locally, converts it into flashcards, and provides two swipe-based learning modes:
+The app imports a downloaded Anki `.apkg` package, parses it locally, stores flashcards and progress in local SQLite, and provides two swipe-based learning modes:
 
 1. Read-through mode
-   - Swipe up: the user knows the word.
-   - Swipe down: the user does not know the word; add it to the unknown-word list.
+   - Swipe up: user knows the card.
+   - Swipe down: user does not know the card; add it to the unknown list.
 
 2. Unknown review mode
-   - Uses weighted random sampling from the unknown-word list.
-   - Swipe up: the user knows the word once.
-   - Three consecutive swipe-up reviews remove the word from the unknown-word list.
-   - Swipe down: the user does not know the word; reset known streak and increase future selection probability.
+   - Uses weighted random sampling from `unknown_cards`.
+   - Swipe up: increment `known_streak`; three consecutive known reviews remove the card from `unknown_cards`.
+   - Swipe down: reset `known_streak`, increment `failure_count`, and increase `review_weight`.
 
-The app must be fully local. Do not add backend, cloud sync, analytics, account login, telemetry, or network calls.
-
----
-
-## Core Product Rules
-
-- First launch:
-  - If no deck has been imported, show the import screen.
-  - The user must select a local `.apkg` file.
-
-- Later launches:
-  - If a deck has already been imported, open the home screen directly.
-  - Do not ask the user to select the `.apkg` file again.
-
-- Replacing deck:
-  - The user may tap `Choose New .apkg`.
-  - Show a confirmation dialog.
-  - Replacing the deck clears the old deck, old cards, old unknown list, and old progress.
-
-- MVP limitations:
-  - Ignore Anki audio and images.
-  - Strip HTML instead of rendering full HTML.
-  - Treat the first note field as the card front.
-  - Treat the second note field as the card back.
-  - Add TODO comments for field mapping, media extraction, cloze support, and HTML rendering.
+The app must remain local-only. Do not add backend services, sync, accounts, analytics, telemetry, or network features.
 
 ---
 
-## Required Dependencies
+## Current Implementation
 
-Use these packages unless there is a strong reason not to:
+The app is implemented in Flutter using simple controllers and `ChangeNotifier`.
+
+Current important dependencies:
 
 ```yaml
-file_picker
-path_provider
-sqflite
-path
 archive
 crypto
+file_picker
+flutter_html
+just_audio
+path
+path_provider
+sqflite
+sqflite_common_ffi
 ```
 
-Do not add heavy state-management or UI libraries unless the task explicitly requires them.
+Dependency notes:
 
-Preferred MVP state management:
-- `ChangeNotifier`, `ValueNotifier`, or simple controller classes.
-
-Avoid:
-- unnecessary networking packages
-- Firebase
-- cloud storage SDKs
-- analytics SDKs
-- overly complex architecture frameworks
+- `sqflite` is used for mobile-style SQLite APIs.
+- `sqflite_common_ffi` is required for Linux/Windows desktop SQLite.
+- `flutter_html` renders Anki template HTML.
+- `just_audio` is kept for non-Linux platforms.
+- Linux audio playback intentionally uses local `ffplay` through `Process.start`, not `just_audio`, because `just_audio` has no default Linux implementation and the `media_kit`/MPV backend produced noisy cache warnings in this environment.
+- Do not re-add `just_audio_media_kit` or `media_kit_libs_linux` unless you also solve MPV disk-cache warnings.
 
 ---
 
-## Expected Project Structure
-
-Prefer this structure:
+## Project Structure
 
 ```text
 lib/
@@ -89,6 +64,7 @@ lib/
     local_db.dart
     deck_dao.dart
     card_dao.dart
+    media_dao.dart
     unknown_card_dao.dart
     review_event_dao.dart
 
@@ -120,110 +96,88 @@ lib/
     unknown_review/
       unknown_review_screen.dart
       unknown_review_controller.dart
-
-    settings/
-      settings_screen.dart
 ```
 
-Keep files small and focused.
+There is no separate settings screen currently; deck replacement is available from `HomeScreen` through `Choose New .apkg`.
 
 ---
 
-## Database Schema
+## Local Data Model
 
-Use local SQLite through `sqflite`.
+SQLite is initialized in `lib/data/local_db.dart`.
 
-Create these tables:
+Current schema version is `2`.
 
-```sql
-CREATE TABLE decks (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  source_file_name TEXT NOT NULL,
-  imported_at INTEGER NOT NULL,
-  card_count INTEGER NOT NULL
-);
+Tables:
 
-CREATE TABLE cards (
-  id TEXT PRIMARY KEY,
-  deck_id TEXT NOT NULL,
-  anki_note_id TEXT,
-  anki_card_id TEXT,
-  front TEXT NOT NULL,
-  back TEXT NOT NULL,
-  raw_fields TEXT,
-  read_seen_count INTEGER NOT NULL DEFAULT 0,
-  last_read_at INTEGER,
-  created_at INTEGER NOT NULL,
-  FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
-);
+- `decks`
+- `cards`
+- `media`
+- `unknown_cards`
+- `review_events`
 
-CREATE TABLE unknown_cards (
-  card_id TEXT PRIMARY KEY,
-  deck_id TEXT NOT NULL,
-  known_streak INTEGER NOT NULL DEFAULT 0,
-  failure_count INTEGER NOT NULL DEFAULT 0,
-  review_weight REAL NOT NULL DEFAULT 1.0,
-  added_at INTEGER NOT NULL,
-  last_reviewed_at INTEGER,
-  FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE,
-  FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
-);
+Important `cards` columns:
 
-CREATE TABLE review_events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  card_id TEXT NOT NULL,
-  deck_id TEXT NOT NULL,
-  mode TEXT NOT NULL,
-  action TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);
-```
+- `front` / `back`: cleaned text used for search, IDs, and fallback display.
+- `front_html` / `back_html`: rendered Anki template HTML used by the flashcard view.
+- `card_type`: one of `basic`, `image`, `audio`, `cloze`, `mixed`.
+- `raw_fields`: original Anki fields joined by Anki's unit separator.
 
-Use transactions and batch inserts for deck import.
+Important `media` columns:
+
+- `card_id`
+- `file_name`
+- `local_path`
+- `media_type`: `image` or `audio`
+
+Deck replacement must clear the old deck, cards, media, unknown list, and review events.
 
 ---
 
 ## APKG Import Rules
 
-Implement an importer similar to:
+`ApkgImporter.importFromFile(File file)` owns package-level import.
 
-```dart
-class ApkgImporter {
-  Future<ImportResult> importFromFile(File file);
-}
-```
+Importer behavior:
 
-The importer must:
+1. Validate `.apkg` extension.
+2. Copy the selected package to temporary app storage.
+3. Decode it as a zip archive.
+4. Extract the Anki media manifest and referenced media files into app-private deck media storage.
+5. Prefer `collection.anki21`, then fall back to `collection.anki2`.
+6. Try each collection database until valid cards are produced.
+7. Save deck, cards, and media rows in a transaction/batch.
+8. Persist the imported deck ID as the current deck.
 
-1. Validate that the selected file has the `.apkg` extension.
-2. Copy the file into app-private or temporary storage.
-3. Decode the `.apkg` file as a zip archive.
-4. Extract `collection.anki2`.
-5. Open `collection.anki2` as SQLite.
-6. Read Anki notes/cards.
-7. Parse note fields.
-8. For MVP:
-   - `front = first note field`
-   - `back = second note field`
-9. Clean text:
-   - Strip HTML tags.
-   - Remove `[sound:xxx]` tags.
-   - Trim whitespace.
-   - Skip cards with empty front or empty back.
-10. Generate stable local card IDs using a hash of:
-   - deck id
-   - Anki note id
-   - Anki card id
-   - front text
-   - back text
-11. Save the deck and cards into the app database.
+Important: modern APKG files can include an empty compatibility `collection.anki2` and store the real notes/cards in `collection.anki21`. Do not regress this behavior.
 
-Important:
-- `.apkg` is not plain text.
-- It is a package/archive containing Anki database files.
-- Do not attempt to parse it with string scanning alone.
-- Keep parsing code isolated in `import/`.
+---
+
+## Anki Parsing Rules
+
+`AnkiParser` reads Anki SQLite databases and renders card templates.
+
+Current supported behavior:
+
+- Reads `col.models`, `notes`, and `cards`.
+- Maps note fields by model field names.
+- Renders `qfmt` and `afmt`.
+- Handles `{{FrontSide}}` by not duplicating the rendered front in `back_html`.
+- Handles basic conditional sections.
+- Handles basic cloze syntax.
+- Preserves HTML for display.
+- Cleans text with `HtmlCleaner` for `front` and `back`.
+- Extracts image references from `<img src="...">`.
+- Extracts audio references from `[sound:...]`.
+- Maps media references to app-private local media paths.
+- Generates stable card IDs from deck ID, Anki note ID, Anki card ID, front text, and back text.
+
+Known limitations:
+
+- This is not a full Anki clone.
+- Complex Anki filters/templates may not render perfectly.
+- Media is extracted only when referenced through standard Anki media manifest entries and simple HTML/audio tags.
+- Keep parser improvements isolated in `lib/import/`.
 
 ---
 
@@ -238,9 +192,30 @@ else:
     show ImportDeckScreen
 ```
 
-Persist the current deck id locally.
+Current deck persistence is implemented in `AppPaths`.
 
-Use app-private storage for copied/imported files.
+---
+
+## Flashcard UI
+
+`SwipeCardView` displays one compact card.
+
+Current behavior:
+
+- Content is merged into one compact card body.
+- The card avoids a scrollbar by using `FittedBox.scaleDown`.
+- If `back_html` already includes the front content, the separate front display is suppressed.
+- Images are constrained relative to available card height.
+- Audio buttons are compact.
+- Vertical drag is used for swipe actions:
+  - up = known
+  - down = unknown
+
+Linux audio behavior:
+
+- `SwipeCardView` uses `ffplay -nodisp -autoexit -loglevel quiet <file>` on Linux.
+- `ffplay` must be available in the runtime environment for Linux audio playback.
+- Non-Linux platforms use `just_audio`.
 
 ---
 
@@ -250,97 +225,66 @@ Use app-private storage for copied/imported files.
 
 Must include:
 
-- Button: `Choose .apkg File`
+- `Choose .apkg File`
 - Import progress text
 - Error state
-- Success transition to HomeScreen
-
-Import progress examples:
-
-```text
-Selecting file...
-Copying file...
-Extracting package...
-Reading Anki database...
-Generating cards...
-Saving local database...
-Import complete.
-```
+- Success transition to `HomeScreen`
 
 ### HomeScreen
 
 Must include:
 
 - Current deck name
+- Source file name
 - Total card count
 - Unknown word count
-- Button: `Read-through Mode`
-- Button: `Unknown Review Mode`
-- Button: `Choose New .apkg`
+- `Read-through Mode`
+- `Unknown Review Mode`
+- `Choose New .apkg`
+
+Replacing a deck must show confirmation and then clear the old deck/progress.
 
 ### ReadThroughScreen
 
-Behavior:
+Swipe up:
 
-- Show one card at a time.
-- Swipe up:
-  - Increment `read_seen_count`.
-  - Update `last_read_at`.
-  - Log review event:
-    - `mode = read_through`
-    - `action = known`
-- Swipe down:
-  - Increment `read_seen_count`.
-  - Update `last_read_at`.
-  - Insert into `unknown_cards` if not already present.
-  - Log review event:
-    - `mode = read_through`
-    - `action = unknown`
+- Increment `read_seen_count`.
+- Update `last_read_at`.
+- Log review event with `mode = read_through`, `action = known`.
 
-UI text should clearly explain:
+Swipe down:
 
-```text
-Read-through Mode
-Swipe up = known
-Swipe down = add to unknown list
-```
+- Increment `read_seen_count`.
+- Update `last_read_at`.
+- Insert into `unknown_cards` if not already present.
+- Log review event with `mode = read_through`, `action = unknown`.
 
 ### UnknownReviewScreen
 
-Behavior:
+Card selection:
 
-- Only use cards in `unknown_cards`.
-- Pick cards using weighted random sampling.
-- Swipe up:
-  - `known_streak += 1`
-  - If `known_streak >= 3`, delete the card from `unknown_cards`.
-  - Otherwise reduce `review_weight` mildly, but never below `1.0`.
-  - Log review event:
-    - `mode = unknown_review`
-    - `action = known`
-- Swipe down:
-  - `known_streak = 0`
-  - `failure_count += 1`
-  - `review_weight = min(review_weight + 2, 20)`
-  - Update `last_reviewed_at`
-  - Log review event:
-    - `mode = unknown_review`
-    - `action = unknown`
+- Use `ReviewScheduler` weighted random sampling.
 
-UI text should clearly explain:
+Swipe up:
 
-```text
-Unknown Review Mode
-Swipe up = known once
-Three consecutive known reviews remove the word
-Swipe down = still unknown, appears more often
-```
+- `known_streak += 1`
+- If `known_streak >= 3`, delete from `unknown_cards`.
+- Otherwise reduce `review_weight` mildly, but never below `1.0`.
+- Log review event with `mode = unknown_review`, `action = known`.
+
+Swipe down:
+
+- `known_streak = 0`
+- `failure_count += 1`
+- `review_weight = min(review_weight + 2, 20)`
+- Update `last_reviewed_at`.
+- Log review event with `mode = unknown_review`, `action = unknown`.
 
 ---
 
 ## Weighted Random Scheduler
 
-Implement this in `domain/review_scheduler.dart`.
+Implemented in `lib/domain/review_scheduler.dart`.
 
 Algorithm:
 
@@ -360,87 +304,88 @@ Rules:
 - Minimum review weight: `1.0`
 - Maximum review weight: `20.0`
 - Swipe down increases weight.
-- Swipe up decreases weight mildly only if the word remains in the unknown list.
-- Three consecutive swipe-up reviews remove the word.
+- Swipe up decreases weight only if the card remains in the unknown list.
+
+---
+
+## Linux Runner Notes
+
+`linux/runner/main.cc` includes a targeted workaround for a noisy GTK/GDK cursor-theme message:
+
+```text
+Unable to load ... from the cursor theme
+```
+
+The runner sets `XCURSOR_THEME=Adwaita` when no cursor theme is defined and filters that exact message path. Avoid broad suppression of GTK/GDK logs.
 
 ---
 
 ## Error Handling
 
-Handle these cases clearly:
+Handle these clearly:
 
 - No file selected.
 - Selected file is not `.apkg`.
-- `.apkg` cannot be decoded as zip.
-- `collection.anki2` not found.
-- SQLite open/read fails.
+- APKG cannot be decoded as zip.
+- No supported collection database found.
+- Collection SQLite open/read fails.
 - No valid cards found.
-- Imported deck has empty front/back fields.
-- Database write fails.
+- Media extraction failures where possible.
+- Database write failures.
+- Missing audio files.
+- Linux `ffplay` playback failure.
 
 Do not crash the app for malformed decks. Show a useful error message.
 
 ---
 
-## UX Requirements
-
-Keep UI simple and clean.
-
-Required empty states:
-
-- No deck imported.
-- Import failed.
-- No valid cards found.
-- Read-through completed.
-- Unknown list is empty.
-
-Add undo support if feasible:
-
-- Keep the last swipe action in memory.
-- Provide an `Undo` button.
-- Undo should restore the previous card state as much as possible.
-
-Do not overbuild animations. Swipe behavior and correctness are more important than visual polish.
-
----
-
 ## Code Style
 
-- Use clear names.
+- Keep the app local-only.
 - Keep business logic out of widgets where practical.
 - Put database logic in DAO classes.
-- Put APKG parsing logic in importer/parser classes.
+- Put APKG/archive work in `apkg_importer.dart`.
+- Put Anki database/template parsing in `anki_parser.dart`.
 - Put review-card selection logic in `ReviewScheduler`.
 - Prefer small methods with explicit error handling.
-- Use comments for non-obvious Anki parsing logic.
-- Add TODO comments for known MVP limitations.
+- Do not add heavy state management unless the task clearly requires it.
+- Do not silently change schema behavior without updating this file.
 
 ---
 
-## Testing Expectations
+## Testing And Verification
 
-When possible, add tests for:
+Existing tests cover:
 
-- HTML stripping.
-- `[sound:xxx]` removal.
-- note field parsing.
-- weighted random scheduler boundaries.
-- unknown-card known-streak logic.
-- unknown-card failure logic.
-- card ID hash stability.
+- HTML stripping and sound-tag removal.
+- Card ID stability.
+- Anki template rendering/media mapping.
+- APKG collection ordering (`collection.anki21` before `collection.anki2`).
+- Weighted random scheduler boundaries.
+
+Before handing off meaningful changes, run:
+
+```bash
+flutter analyze --no-pub
+flutter test
+flutter build linux --no-pub
+```
+
+If dependencies changed, run `flutter pub get` first and then use the same checks.
 
 Manual test checklist:
 
-1. Fresh install opens ImportDeckScreen.
-2. User can select `.apkg`.
-3. Valid cards are imported.
-4. Second app launch opens HomeScreen directly.
-5. Read-through swipe up records known event.
-6. Read-through swipe down adds card to unknown list.
-7. Unknown review swipe up increments known streak.
-8. Three consecutive swipe-up reviews remove the card from unknown list.
-9. Unknown review swipe down resets streak and increases weight.
-10. Choose New `.apkg` replaces the old deck after confirmation.
+1. Fresh install opens `ImportDeckScreen`.
+2. User can select a local `.apkg`.
+3. Modern APKG files with `collection.anki21` import valid cards.
+4. Imported media displays/plays locally.
+5. Second app launch opens `HomeScreen`.
+6. Read-through swipe up records a known event.
+7. Read-through swipe down adds card to unknown list.
+8. Unknown review swipe up increments known streak.
+9. Three consecutive known reviews remove the card from unknown list.
+10. Unknown review swipe down resets streak and increases weight.
+11. `Choose New .apkg` replaces the old deck after confirmation.
 
 ---
 
@@ -450,29 +395,7 @@ Manual test checklist:
 - Do not add login.
 - Do not add cloud sync.
 - Do not add Firebase.
-- Do not add analytics.
-- Do not delete source code unrelated to the task.
-- Do not silently change the data model without updating this file.
+- Do not add analytics or telemetry.
+- Do not delete unrelated source code.
 - Do not implement a full Anki clone.
-- Do not attempt complete Anki media/cloze/template support in the MVP.
-
----
-
-## Implementation Priority
-
-Build in this order:
-
-1. Flutter app skeleton and navigation.
-2. SQLite database and DAO layer.
-3. Import screen and file picker.
-4. APKG unzip and `collection.anki2` extraction.
-5. Basic Anki note/card parsing.
-6. Save imported cards to local SQLite.
-7. Startup persistence.
-8. Home screen statistics.
-9. Read-through swipe mode.
-10. Unknown review weighted mode.
-11. Error states and replacement-deck flow.
-12. Undo and tests.
-
-Correct local data behavior is more important than visual polish.
+- Do not reintroduce MPV/media_kit for Linux audio unless the cache-warning issue is solved.
