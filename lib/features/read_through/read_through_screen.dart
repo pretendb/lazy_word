@@ -45,29 +45,78 @@ class _ReadThroughScreenState extends State<ReadThroughScreen> {
           }
           final card = controller.current;
           if (card == null) {
-            return const Center(child: Text('Read-through completed.'));
-          }
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
+            return Column(
               children: [
-                const Text(
-                  'Swipe up = known  •  Swipe down = add to unknown list',
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: SwipeCardView(
-                    key: ValueKey(card.id),
-                    card: card,
-                    onKnown: () => controller.swipe(known: true),
-                    onUnknown: () => controller.swipe(known: false),
-                  ),
+                _ReadProgress(controller: controller),
+                const Expanded(
+                  child: Center(child: Text('Read-through completed.')),
                 ),
               ],
-            ),
+            );
+          }
+          return Column(
+            children: [
+              _ReadProgress(controller: controller),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Swipe up = known  •  Swipe down = add to unknown list',
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: SwipeCardView(
+                          key: ValueKey(card.id),
+                          card: card,
+                          onKnown: () => controller.swipe(known: true),
+                          onUnknown: () => controller.swipe(known: false),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
+    );
+  }
+}
+
+class _ReadProgress extends StatelessWidget {
+  const _ReadProgress({required this.controller});
+
+  final ReadThroughController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = controller.totalCount == 0
+        ? '0%'
+        : '${controller.progressPercent}%';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Read progress',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              Text(
+                '$label (${controller.readCount}/${controller.totalCount})',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+            ],
+          ),
+        ),
+        LinearProgressIndicator(value: controller.progress),
+      ],
     );
   }
 }

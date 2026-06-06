@@ -89,66 +89,97 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Lazy Word')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 620),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              Text(
-                widget.deck.name,
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(widget.deck.sourceFileName),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      label: 'Cards',
-                      value: '${widget.deck.cardCount}',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatCard(
-                      label: 'Unknown',
-                      value: _unknownCount?.toString() ?? '...',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              FilledButton.icon(
-                onPressed: () => _open(
-                  ReadThroughScreen(
-                    cardDao: widget.cardDao,
-                    deckId: widget.deck.id,
+      body: AnimatedBuilder(
+        animation: widget.importController,
+        builder: (context, child) => Column(
+          children: [
+            if (widget.importController.isImporting)
+              const LinearProgressIndicator(),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 620),
+                  child: ListView(
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      Text(
+                        widget.deck.name,
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(widget.deck.sourceFileName),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _StatCard(
+                              label: 'Cards',
+                              value: '${widget.deck.cardCount}',
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _StatCard(
+                              label: 'Unknown',
+                              value: _unknownCount?.toString() ?? '...',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+                      FilledButton.icon(
+                        onPressed: widget.importController.isImporting
+                            ? null
+                            : () => _open(
+                                ReadThroughScreen(
+                                  cardDao: widget.cardDao,
+                                  deckId: widget.deck.id,
+                                ),
+                              ),
+                        icon: const Icon(Icons.menu_book_outlined),
+                        label: const Text('Read-through Mode'),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.tonalIcon(
+                        onPressed: widget.importController.isImporting
+                            ? null
+                            : () => _open(
+                                UnknownReviewScreen(
+                                  unknownCardDao: widget.unknownCardDao,
+                                  deckId: widget.deck.id,
+                                ),
+                              ),
+                        icon: const Icon(Icons.replay),
+                        label: const Text('Unknown Review Mode'),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: widget.importController.isImporting
+                            ? null
+                            : _replaceDeck,
+                        icon: widget.importController.isImporting
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.folder_open),
+                        label: const Text('Choose New .apkg'),
+                      ),
+                      if (widget.importController.progress.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          widget.importController.progress,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                icon: const Icon(Icons.menu_book_outlined),
-                label: const Text('Read-through Mode'),
               ),
-              const SizedBox(height: 12),
-              FilledButton.tonalIcon(
-                onPressed: () => _open(
-                  UnknownReviewScreen(
-                    unknownCardDao: widget.unknownCardDao,
-                    deckId: widget.deck.id,
-                  ),
-                ),
-                icon: const Icon(Icons.replay),
-                label: const Text('Unknown Review Mode'),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _replaceDeck,
-                icon: const Icon(Icons.folder_open),
-                label: const Text('Choose New .apkg'),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

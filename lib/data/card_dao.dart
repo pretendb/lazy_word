@@ -21,6 +21,24 @@ class CardDao {
     return hydrateCardMedia(db, rows.map(FlashCard.fromMap).toList());
   }
 
+  Future<({int read, int total})> readProgress(String deckId) async {
+    final db = await _localDb.database;
+    final row = (await db.rawQuery(
+      '''
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN read_seen_count > 0 THEN 1 ELSE 0 END) AS read
+      FROM cards
+      WHERE deck_id = ?
+      ''',
+      [deckId],
+    )).single;
+    return (
+      read: (row['read'] as int?) ?? 0,
+      total: (row['total'] as int?) ?? 0,
+    );
+  }
+
   Future<void> markRead(FlashCard card, {required bool known}) async {
     final db = await _localDb.database;
     final now = DateTime.now().millisecondsSinceEpoch;
