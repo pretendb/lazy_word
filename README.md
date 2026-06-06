@@ -24,6 +24,21 @@ flutter pub get
 flutter analyze --no-pub
 flutter test
 flutter build linux --no-pub
+flutter build apk --release
+```
+
+## Linux Package
+
+Build the Debian package:
+
+```bash
+scripts/build_deb.sh
+```
+
+The package is written to:
+
+```text
+dist/lazy-word_1.0.0_amd64.deb
 ```
 
 ## Linux Install
@@ -80,6 +95,10 @@ Imported decks and review progress are user data and are not deleted by package 
 rm -f "$HOME/.dart_tool/sqflite_common_ffi/databases/lazy_word.db"*
 rm -rf "$HOME/Documents/lazy_word"
 ```
+
+# Android Install
+`/home/ubuntu/develop/android-sdk/platform-tools/adb install build/app/outputs/flutter-apk/app-release.apk`
+
 ## Download the apkg resource from
 https://ankiweb.net/shared/decks?search=english&sort=rating
 

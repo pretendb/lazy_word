@@ -322,7 +322,22 @@ The runner sets `XCURSOR_THEME=Adwaita` when no cursor theme is defined and filt
 
 ## App Packaging
 
-Linux Debian packaging is currently a manual local build process.
+Linux Debian packaging is automated by `scripts/build_deb.sh`.
+
+Run the full package build from the repository root:
+
+```bash
+scripts/build_deb.sh
+```
+
+Useful faster rebuild options:
+
+```bash
+scripts/build_deb.sh --skip-checks
+scripts/build_deb.sh --skip-checks --skip-build
+```
+
+The script runs `flutter analyze --no-pub`, `flutter test`, `flutter build linux --no-pub --release`, stages the release bundle, and writes the package to `dist/lazy-word_<version>_amd64.deb`.
 
 Package naming:
 
@@ -335,6 +350,8 @@ Package naming:
 - Debian artifact path: `dist/lazy-word_<version>_amd64.deb`
 
 Use the Flutter app version from `pubspec.yaml` without the build suffix. For example, `version: 1.0.0+1` becomes Debian package version `1.0.0`.
+
+Keep `scripts/build_deb.sh` aligned with the rules below when packaging details change.
 
 Before packaging, build and verify:
 
