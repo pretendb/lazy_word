@@ -10,6 +10,17 @@ class CardDao {
 
   final LocalDb _localDb;
 
+  Future<List<FlashCard>> deckCards(String deckId) async {
+    final db = await _localDb.database;
+    final rows = await db.query(
+      'cards',
+      where: 'deck_id = ?',
+      whereArgs: [deckId],
+      orderBy: 'created_at, id',
+    );
+    return hydrateCardMedia(db, rows.map(FlashCard.fromMap).toList());
+  }
+
   Future<List<FlashCard>> unreadCards(String deckId) async {
     final db = await _localDb.database;
     final rows = await db.query(

@@ -47,7 +47,7 @@ class _ReadThroughScreenState extends State<ReadThroughScreen> {
           if (card == null) {
             return Column(
               children: [
-                _ReadProgress(controller: controller),
+                _ReadProgressSlider(controller: controller),
                 const Expanded(
                   child: Center(child: Text('Read-through completed.')),
                 ),
@@ -56,7 +56,7 @@ class _ReadThroughScreenState extends State<ReadThroughScreen> {
           }
           return Column(
             children: [
-              _ReadProgress(controller: controller),
+              _ReadProgressSlider(controller: controller),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
@@ -86,16 +86,22 @@ class _ReadThroughScreenState extends State<ReadThroughScreen> {
   }
 }
 
-class _ReadProgress extends StatelessWidget {
-  const _ReadProgress({required this.controller});
+class _ReadProgressSlider extends StatelessWidget {
+  const _ReadProgressSlider({required this.controller});
 
   final ReadThroughController controller;
 
   @override
   Widget build(BuildContext context) {
-    final label = controller.totalCount == 0
+    final readLabel = controller.totalCount == 0
         ? '0%'
         : '${controller.progressPercent}%';
+    final positionLabel = controller.completed
+        ? 'Complete'
+        : 'Card ${controller.positionNumber}/${controller.totalCount}';
+    final max = controller.totalCount == 0
+        ? 1.0
+        : controller.totalCount.toDouble();
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -109,13 +115,35 @@ class _ReadProgress extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelLarge,
               ),
               Text(
-                '$label (${controller.readCount}/${controller.totalCount})',
+                '$readLabel (${controller.readCount}/${controller.totalCount})',
                 style: Theme.of(context).textTheme.labelLarge,
               ),
             ],
           ),
         ),
-        LinearProgressIndicator(value: controller.progress),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Slider(
+            value: controller.seekValue,
+            min: 0,
+            max: max,
+            divisions: controller.totalCount == 0
+                ? null
+                : controller.totalCount,
+            label: positionLabel,
+            onChanged: controller.totalCount == 0 ? null : controller.seekTo,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              positionLabel,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ),
       ],
     );
   }

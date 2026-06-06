@@ -14,19 +14,38 @@ class ReadThroughController extends ChangeNotifier {
   String? error;
   int readCount = 0;
   int totalCount = 0;
+  int currentIndex = 0;
+  final Set<String> _readCardIds = {};
 
-  FlashCard? get current => cards.isEmpty ? null : cards.first;
+  FlashCard? get current {
+    if (currentIndex < 0 || currentIndex >= cards.length) return null;
+    return cards[currentIndex];
+  }
+
   double get progress => totalCount == 0 ? 0 : readCount / totalCount;
   int get progressPercent => (progress * 100).round();
+  double get seekValue => currentIndex.clamp(0, totalCount).toDouble();
+  int get positionNumber {
+    if (totalCount == 0) return 0;
+    return (currentIndex + 1).clamp(1, totalCount);
+  }
+
+  bool get completed => totalCount > 0 && currentIndex >= totalCount;
 
   Future<void> load() async {
     loading = true;
     notifyListeners();
     try {
-      cards = await _cardDao.unreadCards(deckId);
-      final progress = await _cardDao.readProgress(deckId);
-      readCount = progress.read;
-      totalCount = progress.total;
+      cards = await _cardDao.deckCards(deckId);
+      totalCount = cards.length;
+      _readCardIds
+        ..clear()
+        ..addAll(
+          cards.where((card) => card.readSeenCount > 0).map((card) => card.id),
+        );
+      readCount = _readCardIds.length;
+      currentIndex = cards.indexWhere((card) => card.readSeenCount == 0);
+      if (currentIndex == -1) currentIndex = cards.length;
     } catch (exception) {
       error = '$exception';
     } finally {
@@ -35,17 +54,30 @@ class ReadThroughController extends ChangeNotifier {
     }
   }
 
+  void seekTo(double value) {
+    if (totalCount == 0) return;
+    currentIndex = value.round().clamp(0, totalCount);
+    notifyListeners();
+  }
+
   Future<void> swipe({required bool known}) async {
     final card = current;
     if (card == null) return;
-    cards.removeAt(0);
-    if (readCount < totalCount) readCount += 1;
+    final wasAlreadyRead = _readCardIds.contains(card.id);
+    if (!wasAlreadyRead) {
+      _readCardIds.add(card.id);
+      readCount = _readCardIds.length;
+    }
+    if (currentIndex < cards.length) currentIndex += 1;
     notifyListeners();
     try {
       await _cardDao.markRead(card, known: known);
     } catch (exception) {
-      cards.insert(0, card);
-      if (readCount > 0) readCount -= 1;
+      if (currentIndex > 0) currentIndex -= 1;
+      if (!wasAlreadyRead) {
+        _readCardIds.remove(card.id);
+        readCount = _readCardIds.length;
+      }
       error = '$exception';
       notifyListeners();
     }
